@@ -1,17 +1,18 @@
-
-                      PCIM-DAS1602/16 Version 1.4
+                      PCIM-DAS1602/16 Version 2.0
                       ---------------------------
 
- Linux loadable module for the Measurement Computing PCIM-DAS1602/16 A/D D/A DIO adapter
- ----------------------------------------------------------------------------------------
+ Linux loadable module for the Measurement Computing PCIM-DAS1602/16 and PCIe-DAS1602/16 adapters
+ ------------------------------------------------------------------------------------------------
 
 Introduction:
 -------------
-This driver was written by Warren J. Jasper at North Carolina State
-University.  It is a driver for the Measurement Computing PCIM-DAS1602/16 A/D
-adapter. It should run on all Linux  2.6.29 or later kernels on
-Pentium machines.  With minor modification, it should run on other
-architectures.
+This driver was written by Warren J. Jasper at North Carolina State University.
+Some updates and modifications have been added by Trev Jackson <trev.g7pvs@ntlworld.com>
+It is a driver for the Measurement Computing PCIM-DAS1602/16 and
+PCIe-DAS1602/16 adapters. It should run on all Linux  2.6.29 or later kernels on
+Pentium machines.  With minor modification, it should run on other architectures.
+Tested as working on Debian 13 (kernel version 6.12.115) with a pair of
+PCIe-DAS1602/16 adapters in Dell Optiplex 3050 (Intel Core i5-7500).
 
 Please send comments and bug fixes to wjasper@ncsu.edu.  The source
 for the driver is located at https://github.com/wjasper/Linux_Drivers
@@ -21,15 +22,17 @@ Distribution contents:
 README                    - this file
 License                   - Gnu Public License
 Makefile                  - Makefile to compile and install the driver
-a2dc.c	                  - PCIM-DAS1602/16 source
-a2dc_2_6_29.c             - kernel version 2.6.29
-a2dc_3_3_7.c              - kernel version 3.3.7
-a2dc_3_10_11.c            - kernel version 3.10.11
+a2dc.c	                  - PCIM-DAS1602/16 and PCIe-DAS1602/16 source
+ModList                   - Changes to source code.
 a2dc.h	                  - Driver definitions and constants.
 pcim-das1602-16.h         - User and driver definitions and constants.
 test-pcim-das1602-16.c    - Test program.
 pcim-das1602.pdf          - User Manual
 RegMapPCIM-DAS1602-16.pdf - Register map for the PCIM-DAS1602/16
+PCIe-DAS1602-16.pdf       - User manual
+RegMapPCIe-DAS1602-16.pdf - Register map for the PCIe-DAS1602/16
+82C54.pdf                 - CMOS Programmable Interval Timer datasheet
+82C55A.pdf                - CMOS Programmable Peripheral Interface datasheet
 
 
 Building and installing the driver:
@@ -43,9 +46,6 @@ Building and installing the driver:
 
 License
 a2dc.c
-a2dc_2_6_29.c
-a2dc_3_3_7.c
-a2dc_3_10_11.c
 a2dc.h
 pcim-das1602-16.h
 test-pcim-das1602-16.c
@@ -54,6 +54,11 @@ README
 License
 ModList
 pcim-das1602-16.pdf
+RegMapPCIM-DAS1602-16.pdf
+PCIe-DAS1602-16.pdf
+RegMapPCIe-DAS1602-16.pdf
+82C54.pdf
+82C55.pdf
 
 
 3. The default configuration is for the kernel to dynamically set the
@@ -61,11 +66,6 @@ pcim-das1602-16.pdf
    major number, set the following in a2dc.h
 
    #define DEFAULT_MAJOR_DEV  0    /* Default Major Device Number */
-
-   If you have more than one PCI-DAS1602-16 board in your computer, edit NUM_BOARDS and set
-   it to the correct value in the Makefile.
-
-        NUM_BOARDS=2
 
 
 4. To compile, type:
@@ -98,7 +98,7 @@ You will be able to search the attributes of the device by
    /sbin/udevadm info -a -p $(/sbin/udevadm info -q path -n /dev/pcim-das1602-16/dio0_0A)
 
 
-7. To test run the test program 'test-das1602'
+7. To test run the test program 'test-pcim-das1602'
 
     test-pcim-das1602-16
 
@@ -114,33 +114,39 @@ make install
 How the driver works:
 ---------------------
 
-(This is still under construction.  May not be correct)
-
 The driver is fairly straight forward, but since the current version of
 Linux is not 1003.4 compliant (it is not a real-time operating system),
 certain design decisions were made in writing this driver.
 
 Each A/D channel and  D/A channel and DIO  have their own minor number.
-I call these virtual channels or just channels.  There are 16 virtual A/D channels.
-The board has 16 physical A/D channels. When a channel is opened, it is mapped 1 to 1 to
-it's physical channel with a gain of +/- 5V.  Therefore, opening /dev/das1602-16/ad0_0
-will allow you to read from physical channel 0 on board 0. 
+I call these virtual channels or just channels.  However there is only 1 virtual A/D channel for each board.
+Each board has 16 physical A/D channels, but they are multiplexed and accessed via a single channel.
+When a channel is opened, it is mapped 1 to 1 to the physical channel with a gain of +/- 10V.
+Therefore, opening /dev/das1602-16/ad0_0 will allow you to read from board 0.
 Examples are:
 
-/dev/pcim-das1602-16/ad0_0      A/D channel board 0  physical channel 0
+/dev/pcim-das1602-16/ad0_0      A/D channel board 0
 /dev/pcim-das1602-16/da2_1      D/A channel board 2  physical channel 1
 /dev/pcim-das1602-16/dio1_A     DIO         board 1  port A
 
 These device nodes are generated automagically for you by /sysfs and udev.
 Type ls -l /dev/pcim-das1602-16 to see all the devices.
 
-After the device is opened, it is possible to map or remap different
-physical channels to your virtual channel.  For example, if you want
+Each Main connector is accessed for example via:
+
+/dev/pcim-das1602-16/dio1_X     DIO channel board 1 port X (main connector)
+
+During reads to the main connector the most significant four bits are indeterminate.  Measurement Computing recommends
+that you mask there bits during read operations.
+During writes to the main connector the upper four bits are ignored.
+
+After the A/D device is opened, it is possible to map or remap different
+physical channels to the virtual channel.  For example, if you want
 to read from all 16 channels at once, you will need to map the beginning and
 ending physical channel with ioctl calls (see below).  There are also many 
 triggering and gain options possible.
 
-Each channel can be opened in one of four modes:
+Each A/D board can be opened in one of four modes:
 
 #include <sys/ioctl.h>
 #include <sys/types.h>
@@ -167,7 +173,7 @@ familiar with the different ways to trigger an A/D conversion.
 
 
 ****************************************************************************
-NOTE:  You can only open one channel at a time.  If you are running
+NOTE:  You can only open each channel once.  If you are running
 multiple processes, you must make sure you close the file descriptor before
 tying to open it again.
 ****************************************************************************
@@ -184,17 +190,25 @@ To read from a channel, use:
 ****************************************************************************
 Warning: read() is implemented as a blocking function.  It will return
 when "count" conversions are completed.  Since there is only one A/D
-chip on the board, conversions are multiplexed anyway.
+chip on the board, conversions are multiplexed.
+When using the pacer clock, sometimes 512 samples will be returned when fewer
+samples have been requested, this appears to be a hardware bug in the FPGA and
+only occurs under specific settings of the PCIe-DAS1602/16, therefore it would
+be advisable to ensure that the buffer that the samples will copied into is
+at least 512 words long (unless you have already confirmed that the settings
+you are using don't interact with the hardware bug).
+It is unknown if the same hardware bug is also present in the PCIM-DAS1602/16.
 ****************************************************************************
 
 
 The following ioctl() functions have been implemented:
 
-1. ioctl(fd, ADC_SET_GAINS, Gain); 
-   This sets the input gain settings.  There are 8 allowable settings.
+
+1. ioctl(fd, ADC_SET_GAINS, Gain);
+   This sets the input gain settings.  There are 4 allowable settings.
    See header file pcim-das1602.h for more information.
 
-2. ioctl(fd, ADC_GET_GAINS, Gain); 
+2. ioctl(fd, ADC_GET_GAINS, Gain);
    Returns gain setting for that channel.  See header file pcim-das1602-16.h 
    for more information.
 
@@ -212,7 +226,7 @@ The following ioctl() functions have been implemented:
 6. ioctl(fd, ADC_STOP_PACER, 0);
    Stops the pacer clock.  Does not change any values.
 
-7. ioctl(fd, COUNTER0, CTR0_MODE2 | 10) ;
+7. ioctl(fd, ADC_COUNTER0, CTR0_MODE2 | 10) ;
    This call programs and sets the control register and the counter register
    of the 8254 COUNTER 0.  You really need to get the documentation on
    the 82C54 Programmable Timer from Intel if you want to program the
@@ -226,26 +240,24 @@ The following ioctl() functions have been implemented:
    counter0 is set to Mode 2, and the value 10 is loaded into the timer.
    See header file pci-das1602-16.h for more information.
 
-8. ioctl(fd, ADC_GET_POLARITY, value);
-   Returns two possible values: 'U' = Analog Input Polarity Switch set to Unipolar
-                                'B' = Analog Input Polarity Switch set to Bipolar
+8. ioctl(fd, SET_MODE,mode);
+   Sets mode to ADC_SOFT_CONVERT, ADC_EXTERNAL_PACER_FALLING, ADC_EXTERNAL_PACER_RISING or ADC_PACER_CLOCK
 
-9. ioctl(fd, ADC_TRIGGER_SOURCE, value);
-   Load the value of Trigger Control/Status Register (BADR1+4).  See the file
-   pci-das1602-16.h for possible values.
+9. ioctl(fd, ADC_SET_TRIGGER, value); values are GATE_EN | GATE_LATCH | GATE_POL
 
-10. ioctl(fd, SET_MUX_LOW, value);
+10. ioctl(fd, ADC_SET_MUX_LOW, value);
     Set the beginning value of in the MUX scan register.  This forces the A/D to
     begin conversion on this channel.
 
-11. ioctl(fd, SET_MUX_HIGH, value);
+11. ioctl(fd, ADC_SET_MUX_HIGH, value);
     Set the ending value of in the MUX scan register.  This forces the A/D to
     convert from low_chan to high_chan;
 
 12. ioctl(fd, ADC_GET_CHAN_MUX_REG, *value);
     Return the value of the MUX scan limit register, BADR1 + 2.
 
-13. ioctl(fd, ADC_SET_FRONT_END, True/False);
+
+13. ioctl(fd, ADC_GET_FRONT_END, True/False);
     Analog MOde Switch is set to  Differential or Single Ended Mode.
     16 = Single Ended Mode. Supports up to 16 Channels.
      8 = Differential Mode. Supports up to  8 Channels.
@@ -264,36 +276,46 @@ The following ioctl() functions have been implemented:
     the channel-to-channel skew (delay) is not 5 us, or 20 us total.  The
     minimum burst mode skew/delay on the PCI-DAS1602/16 is 5 us.
 
-15. ioctl(fd, DIO_SET_MODE, Mode);
+15. ioctl(fd, NBIO_CANCEL);
+    Stop acquisition.
+
+16. ioctl(fd, ADC_NBIO_PENDING);
+    returns 1 or 0
+
+17. ioctl(fd, ADC_NBIO_COMPLETE);
+    Returns 1 or 0.
+
+18  ioctl(fd, ADC_GET_CLK_FREQ);
+    returns 1,000,000 or 10,000,000
+
+19. ioctl(fd, ADC_GET_POLARITY, value);
+   Returns two possible values: 'U' = Analog Input Polarity Switch set to Unipolar
+                                'B' = Analog Input Polarity Switch set to Bipolar
+
+20. ioctl(fd, DIO_SET_MODE, Mode);
    Sets the INTEL 8255 Programmable Peripheral Interface to one of three modes:
        MODE_IO            - normal input/output mode
        MODE_STROBE_IO     - Strobed Input/Output (port A or B)
        MODE_BIDIRECTIONAL - Bi-Directional Bus (port A only )
     See the documentation of the chip for more information
 
-16. ioctl(fd, DIO_SET_DIRECTION, Direction)
-   Set the direction of the port to either input or output.  Port C can be split
-   into two levels (4 bits each), while ports A and B are either all input or
-   all output.
+21. ioctl(fd, DIO_SET_DIRECTION, Direction)
+   Set the direction of the port to either input or output, for port A or B:
+       PORT_OUTPUT    - sets all 8 bits to outputs
+       PORT_INPUT     - sets all 8 bits to inputs
+   Port C can be split into two nibbles (4 bits each):
+       HIGH_PORT_INPUT - upper nibble set to input
+       HIGH_PORT_OUTPUT - upper nibble set to output
+       LOW_PORT_INPUT - lower nibble set to input
+       LOW_PORT_OUTPUT - lower nibble set to output
 
-17. ioctl(fd, DAC_SET_GAINS, gain);
-    Possible DAC gain settings are:
-    BP_10_00V           +/- 10V
-    BP_5_00V            +/-  5V 
-    UP_10_00V           0 - 10V
-    UP_5_00V            0 -  5V
-
-18. ioctl(fd, DAC_GET_GAINS, gain);
-    Returs the value of the current gain.  See pci-das1602-16.h for 
-    meaning of the values.
-
-19. ioctl(fd, DAC_SET_PACER_FREQ, Freq);
-    Sets the DAC pacer frequency.  Max frequency is 100,000 Hz.
-
-20. ioctl(fd, DAC_GET_PACER_FREQ, Freq);
-    Gets the current DAC pacer frequency in Hz.
-
-21. ioctl(fd, GET_BUF_SIZE, &value);
+22. ioctl(fd, GET_BUF_SIZE, &value);
     get MAX_COUNT, the maximum number of samples you can
     take in one read().  This is the size of the
     internal buffers in the driver.
+
+23. ioctl(fd,ADC_SET_ACQ_TYPE,ADC_acqtype);
+   Sets ADC_acqtype to ADC_ACQ_NORMAL or ADC_ACQ_CONTINUOUS, default is ADC_ACQ_NORMAL.
+   ADC_ACQ_CONTINUOUS repeatedly reads 511 samples overwriting the buffer and
+   a read will return the most recent 511 samples, polling can be used to check
+   when each read has completed.
