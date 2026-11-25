@@ -68,7 +68,8 @@
 
 #define AD_CHANNELS           1  // Multiplexed 16 Single Ended or 8 Differential
 #define DA_CHANNELS           2  // 2 DAC ports Single ended
-#define DIO_PORTS             4  // 4 dio ports (including Main Connector)
+#define DIO_PORTS             3  // 3 dio ports
+#define DIO2_PORTS            1  // 1 main connector dio port
 #define COUNTERS              3  // 3 counters on the 82C54
 
 #define DEFAULT_FREQ      1000   // Default ADC frequency  1KHz 
@@ -305,4 +306,4 @@ typedef struct BOARD_REC {
 #define FIFO_SIZE  1024
 
 
-#endif
+#endif			     
