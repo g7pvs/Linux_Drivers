@@ -1,6 +1,8 @@
 /***************************************************************************
  Copyright (C) 2012-2015  Warren J. Jasper  <wjasper@ncsu.edu>
  All rights reserved.
+ Updates and modifications by Trev Jackson <trev.g7pvs@ntlworld.com>
+ Copyright (C) 2026
 
  This program, PCIM-DAS1602-16, is free software; you can redistribute it
  and/or modify it under the terms of the GNU General Public License as
@@ -28,7 +30,7 @@
 #define A2DC_H
 
 #define DEBUG 1
-#define ADAPTER_ID "PCIM-DAS1602-16.v1.6"
+#define ADAPTER_ID "PCIM-DAS1602-16.v2.0"
 
 /*****************************
  *     Useful Macros         *
@@ -46,7 +48,7 @@
 #endif
 
 #ifndef MAX_BOARDS
-#define MAX_BOARDS          1   /* Number of Boards */
+#define MAX_BOARDS          10   /* Number of Boards */
 #endif
 
 #ifndef PCI_VENDOR_ID_CBOARDS
@@ -64,9 +66,9 @@
 /*  change to get bigger buf size.  Max value is 0x100000  */
 #define ADC_BUFF_PHY_SIZE   0x10000       /* Physical size of the ADCs buffer  */
 
-#define AD_CHANNELS          16  // 16 Single Ended / 8 Differential
+#define AD_CHANNELS           1  // Multiplexed 16 Single Ended or 8 Differential
 #define DA_CHANNELS           2  // 2 DAC ports Single ended
-#define DIO_PORTS             3  // 3 dio ports
+#define DIO_PORTS             4  // 4 dio ports (including Main Connector)
 #define COUNTERS              3  // 3 counters on the 82C54
 
 #define DEFAULT_FREQ      1000   // Default ADC frequency  1KHz 
@@ -114,7 +116,6 @@
 typedef struct ADC_CHANNEL_REC {
   int open;           // Is channel device open()
   int nonBlockFlag;   // FALSE = block, TRUE = noblocking
-  int mmap_flag;      // Channel has been mmaped for dma
   u32 count;          // Number of samples requested
   u8 lowChan;         // Starting Channel of MUX scan limit
   u8 hiChan;          // Ending Channel of MUX scan limit
@@ -128,7 +129,6 @@ typedef struct ADC_CHANNEL_REC {
 typedef struct DAC_CHANNEL_REC {
   int open;              /* Is channel device open()         */
   u16 value;             /* value of D/A Channel             */
-  u16 gain;              /* Voltage range for output gain    */
 } DAC_ChanRec;
 
 typedef struct DIO_CHANNEL_REC {
@@ -138,6 +138,13 @@ typedef struct DIO_CHANNEL_REC {
   u16 addr;              /* address of the channel      */
   u16 f_flags;           /* flags sent by open()        */
 } DIO_ChanRec;
+
+typedef struct DIO2_CHANNEL_REC {
+  int open;              /* Is channel device open()    */
+  u16 value;             /* value of DIO2 Channel        */
+  u16 addr;              /* address of the channel      */
+  u16 f_flags;           /* flags sent by open()        */
+} DIO2_ChanRec;
 
 typedef struct BOARD_REC {
   struct pci_dev *pdev;      // pointer to pci device struct
@@ -161,12 +168,8 @@ typedef struct BOARD_REC {
   u16 ADC_ctr1;              // ADC Pacer Lower Counter
   u16 ADC_ctr2;              // ADC Pacer Upper Counter
   u32 buf_phy_size;          // size in bytes of the buffer for this board
-  u16 *buf_virt_addr;        // virtual kernal (cpu) address of dma buffer
-  u16 *ADC_KernBuffPtr;      // pointer into the data buffer array
-  u16 *ringbuf_vaddr;        // virtual kernal (cpu) address of ring buffer
-  u32 rb_head;               // ring buffer head index
-  u32 rb_tail;               // ring buffer tail index
-  u32 rb_size;               // ring buffer size
+  u16 *buf_virt_addr;        // pointer inot the data buffer array
+  u16 *ADC_KernBuffPtr;      // pointer to start of the data buffer array
   u32 rb_init;               // ring buffer initialization flag
   u32 ADC_acqtype;           // ADC acquisition type
   u8 dio_reg;                // DIO control register
@@ -233,16 +236,19 @@ typedef struct BOARD_REC {
 #define PS1           0x2
 #define EXT_PACER_POL 0x4  /* 1=external pacer polarity set to negative edge
 			      0=external pacer polarity set to positive edge */
-#define GATE_EN       0x8  /* 1=gate internal pacer always on, ignore pin 25
-			      0=the gate to the internal pacer is controlled by signal on pin 25 */
-#define GATE_LATCH    0x10 /* 1=signal on pin 25 will act as edge trigger to internal pacer. It is latched
-			      in hardware.  Software must clear latch by writing 0 to GATE_STATUS bit.
-			      0 = the signal on pin 25 will act as a level gate to the internal pacer. */
-#define GATE_POL      0x20 /* 1=the trigger/gate polarity is set to a negative edge / low level for non
-			      burst mode, and a positive edge / high level for burst mode.
-			      0=the trigger/gate polarity is set to a positive edge / low level for non
-			      burst mode, and a negative edge / high level for burst mode. */
-#define GATE_STATUS   0x40 /* (Read) 1=the gate to the internal pacer is on, 0=the gate to the internal pacer is off */
+
+//GATE_EN, GATE_LATCH, GATE_POL defined in pcim-das1602-16.
+
+//#define GATE_EN       0x8  /* 1=gate internal pacer always on, ignore pin 25
+//			      0=the gate to the internal pacer is controlled by signal on pin 25 */
+//#define GATE_LATCH    0x10  1=signal on pin 25 will act as edge trigger to internal pacer. It is latched
+//			      in hardware.   Software must clear latch by writing 0 to GATE_STATUS bit.
+//			      0 = the signal on pin 25 will act as a level gate to the internal pacer. */
+//#define GATE_POL      0x20  1=the trigger/gate polarity is set to a negative edge / low level for non
+//			      burst mode, and a positive edge / high level for burst mode.
+//			      0=the trigger/gate polarity is set to a positive edge / low level for non
+//			      burst mode, and a negative edge / high level for burst mode. */
+#define GATE_STATUS   0x40  /*(Read) 1=the gate to the internal pacer is on, 0=the gate to the internal pacer is off */
                            /* (Write) 0=clears the hardware latch when GATE_LATCH=1 */
 
 /***********************************************************************************
@@ -299,4 +305,4 @@ typedef struct BOARD_REC {
 #define FIFO_SIZE  1024
 
 
-#endif			     
+#endif
