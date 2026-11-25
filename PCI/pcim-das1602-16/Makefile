@@ -1,12 +1,14 @@
 ##############################################################################
-#	Makefile for building:
+#        Makefile for building:
 #
-#		adc.o:    PCIM-1602/16 A/D adapater Linux loadable module.
-#		test-das1602:   Program to test adc module
+#        adc.o:    PCIM-1602/16 A/D adapater Linux loadable module.
+#        test-das1602:   Program to test adc module
 #
-#               Copyright (C) 2011
-#               Written by:  Warren J. Jasper <wjasper@ncsu.edu>
-#                            North Carolina State University
+#        Copyright (C) 2011
+#        Written by:  Warren J. Jasper <wjasper@ncsu.edu>
+#                     North Carolina State University
+#        Updates and modifications by Trev Jackson <trev.g7pvs@ntlworld.com>
+#        Copyright (C) 2026
 #
 #
 # This program, PCIM-DAS1602/16, is free software; you can redistribute it
@@ -27,16 +29,11 @@
 # Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 ###########################################################################
 #  Current Version of the driver
-VERSION=1.7
+VERSION=2.0
 
 # To let the kernel know is this not a signed copy.
 CONFIG_MODULE_SIG=n
 CONFIG_MODULE_SIG_ALL=n
-
-#
-#  Number of PCIM-DAS1602/16 boards on your system: 
-#  MUST ALSO CHANGE MAX_BOARDS in a2dc.h
-NUM_BOARDS=1
 
 ID=PCIM-DAS1602-16
 DIST_NAME=$(ID).$(VERSION).tgz
@@ -57,7 +54,7 @@ KDIR	:= /lib/modules/$(shell uname -r)/build
 PWD	:= $(shell pwd)
 TARGETS=pcim-das1602_16.ko test-pcim-das1602-16
 MODULE_DIR=/lib/modules/`uname -r`/kernel/drivers/char
-DIST_FILES = {a2dc.c,a2dc_2_6_29.c,a2dc_3_3_7.c,a2dc_3_10_11.c,a2dc_4_0_8.c,test-pcim-das1602-16.c,pcim-das1602-16.h,a2dc.h,Makefile,README,ModList,License,RegMapPCIM-DAS1602-16.pdf}
+DIST_FILES = {a2dc.c,test-pcim-das1602-16.c,pcim-das1602-16.h,a2dc.h,Makefile,README,ModList,License,RegMapPCIM-DAS1602-16.pdf,RegMapPCIe-DAS1602-16.pdf,pcim-das1602-16.pdf,PCIe-DAS1602-16.pdf,82C54.pdf,82C55A.pdf}
 
 all: default test-pcim-das1602-16
 
