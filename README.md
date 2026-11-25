@@ -65,7 +65,7 @@ I have written drivers for the following boards:
 15. PCI-DDA0x-12                           
 16. PCI-DDA0x-16                           
 17. PCI-QUAD04
-18. PCIM-DAS1602/16
+18. PCIM-DAS1602/16 (this driver also supports the PCIe-DAS1602/16)
 19. PCIM-DAS16Jr/16
 20. PCIM-DDA06-16
 
