@@ -1,3 +1,17 @@
+25-11-2026/10:32 --tjj--
+  Removed 'THIS_MODULE' from class_create for kernel versions newer than 6.4.
+  Removed DMA as it isn't supported by either PCIe-DAS1602/16 or PCIM-das1602/16.
+  Removed dynamic initialization of 'das1602_wait' as initiallized using static code.
+  Removed ring buffer as not used for anything useful.
+  Changed ioctl 'ADC_SET_TRIGGER' to modify triggers as previously duplicate of 'ADC_SET_MODE'.
+  Merged in all previous version so updates only need applying to one version.
+  Changed GAIN settings in pcim_das1602-16.h as bit 2 not used in register.
+  Stop new read from being initialised in das1602_read when ADC_ACQ_CONTINUOUS is set and rb_init is clear.
+  Remove GATE_EN being set in das1602_read where case is ADC_PACER_CLOCK as it stops external trigger being used.
+  All registers initialised to a known state in das1602_init.
+  Added support for Main Connector.
+  Changed version to 2.0 as this is a major revision.
+
 05-30-2016/11:07 --wjj--
   Added functionality for continuous mode
 
@@ -78,6 +92,3 @@
    loaded every read while in single-ended mode.
 07-25-2011/10:00 - wjj
   Install driver PCIM-DAS1602/16
-
-		  
-
