@@ -12,6 +12,9 @@ comments, suggestions, or questions to me.  All the PCI drivers are licensed
 under the Gnu Public License while the USB, Ethernet, and Bluetooth drivers are
 licensed under the Lesser Gnu Public License or LGPL.  Most PCI drivers
 will run under the Linux 2.6, 3.X ,4.X  and 5.X kernels.
+The PCIM-DAS1602/16 driver has been tested as working on Debian 13
+(kernel version 6.12.115) with a pair of PCIe-DAS1602/16 adapters
+in Dell Optiplex 3050 (Intel Core i5-7500).
 
 For more information on these cards, go to 
 http://www.measurementcomputing.com
