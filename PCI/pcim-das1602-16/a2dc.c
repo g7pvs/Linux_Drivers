@@ -160,6 +160,7 @@ static BoardRec BoardData[MAX_BOARDS];               /* Board specific informati
 static ADC_ChanRec ChanADC[MAX_BOARDS][AD_CHANNELS]; /* ADC Channel specific info   */
 static DAC_ChanRec ChanDAC[MAX_BOARDS][DA_CHANNELS]; /* DAC Channel specific info   */
 static DIO_ChanRec ChanDIO[MAX_BOARDS][DIO_PORTS];   /* DIO Channel specific info   */
+static DIO2_ChanRec ChanDIO2[MAX_BOARDS][DIO2_PORTS]; /* DIO2 Channel specific info */
 static DECLARE_WAIT_QUEUE_HEAD(das1602_wait);
 static int NumBoards = 0;                            /* number of boards found      */
 static spinlock_t das1602_lock;
@@ -337,19 +338,17 @@ static int __devinit das1602_init_one(struct pci_dev *pdev, const struct pci_dev
   sprintf(name, "pcim-das1602-16/ad%d_%d", NumBoards, 0);
   device_create(das1602_class, NULL, MKDEV(MajorNumber, minor), NULL, name); //ADC multiplexed so only one device needed
 
-  ChanDIO[NumBoards][0].addr = DIO_PORTA;              //set address to BADR4+0
-  ChanDIO[NumBoards][1].addr = DIO_PORTB;              //set address to BADR4+1
-  ChanDIO[NumBoards][2].addr = DIO_PORTC;              //set address to BADR4+2
-  ChanDIO[NumBoards][3].addr = DIO_REG;                //set address to BADR3+1
-  BoardData[NumBoards].dio_reg = 0x9b;                 // set Mode 0 for ports A,B and C
+  ChanDIO[NumBoards][0].addr = DIO_PORTA;
+  ChanDIO[NumBoards][1].addr = DIO_PORTB;
+  ChanDIO[NumBoards][2].addr = DIO_PORTC;
+  BoardData[NumBoards].dio_reg = 0x9b;                 // set Mode 0 all Input
   outb(BoardData[NumBoards].dio_reg, DIO_CNTRL_REG);   // ouput to BADR4+3
 
   for ( i = 0; i < DIO_PORTS; i++ ) {
     ChanDIO[NumBoards][i].open = FALSE; 
     ChanDIO[NumBoards][i].mode = 0;
-    outb(0x0, ChanDIO[NumBoards][i].addr);   // output to BADR4+0, BADR4+1, BADR4+2 and BADR3+1
+    outb(0x0, ChanDIO[NumBoards][i].addr);   // output to BADR4+0, BADR4+1, BADR4+2
   }
-
   minor = (NumBoards<<0x5) + AD_CHANNELS;
   sprintf(name, "pcim-das1602-16/dio%d_A", NumBoards);
   device_create(das1602_class, NULL, MKDEV(MajorNumber, minor), NULL, name);
@@ -358,9 +357,6 @@ static int __devinit das1602_init_one(struct pci_dev *pdev, const struct pci_dev
   device_create(das1602_class, NULL, MKDEV(MajorNumber, minor), NULL, name);
   minor++;
   sprintf(name, "pcim-das1602-16/dio%d_C", NumBoards);
-  device_create(das1602_class, NULL, MKDEV(MajorNumber, minor), NULL, name);
-  minor++;
-  sprintf(name, "pcim-das1602-16/dio%d_X", NumBoards);
   device_create(das1602_class, NULL, MKDEV(MajorNumber, minor), NULL, name);
 
   for ( i = 0; i < DA_CHANNELS; i++ ) {
@@ -371,6 +367,12 @@ static int __devinit das1602_init_one(struct pci_dev *pdev, const struct pci_dev
     sprintf(name, "pcim-das1602-16/da%d_%d", NumBoards, i);
     device_create(das1602_class, NULL, MKDEV(MajorNumber, minor), NULL, name);
   }
+
+  ChanDIO2[NumBoards][0].addr = DIO_REG;
+  outb(0x0, ChanDIO2[NumBoards][0].addr);                                          // output to BADR3+1
+  minor = (NumBoards<<0x5) + AD_CHANNELS + DIO_PORTS + DA_CHANNELS;                //Main Connector 4 bit DIO
+  sprintf(name,"pcim-das1602-16/dio%d_X", NumBoards);
+  device_create(das1602_class, NULL, MKDEV(MajorNumber, minor), NULL, name);
 
   BoardData[NumBoards].nSpare0 = 0x0;
   outb(BoardData[NumBoards].nSpare0, INTCSR_REG); /* Reset FIFO interrupts and disable all A/D interupts BADR3+4 */
@@ -520,7 +522,17 @@ static int das1602_open(struct inode *iNode, struct file *filePtr)
     return 0;
   }
 
-
+  if ((chan== AD_CHANNELS+DIO_PORTS+DA_CHANNELS)) {
+    port = chan - AD_CHANNELS - DIO_PORTS - DA_CHANNELS;  /* port = 0 */
+    if ( ChanDIO2[board][port].open == TRUE) {
+      return -EBUSY;
+    }
+    ChanDIO2[board][port].open = TRUE;              /* The device is open */
+    #ifdef DEBUT
+      prink("%s: open(): DIO2 minor %d\n", ADAPTER_ID, minor);
+    #endif
+    return 0;
+  }
   return -1;
 }
 
@@ -569,6 +581,10 @@ static int das1602_close(struct inode *iNode, struct file *filePtr)
     /* DAC */
     port = chan - AD_CHANNELS - DIO_PORTS;
     ChanDAC[board][port].open = FALSE;
+  } else if (chan == AD_CHANNELS+DIO_PORTS+DA_CHANNELS){
+    /* DIO2 */
+    port = chan - AD_CHANNELS - DIO_PORTS - DA_CHANNELS;  /*  port = 0 */
+    ChanDIO2[board][port].open = FALSE;
   } else {
     printk("das1602_close: Incorrect minor number (%d).\n", minor);
   }  
@@ -686,6 +702,7 @@ static ssize_t das1602_read(struct file *filePtr, char *buf, size_t count, loff_
          break;
 
       case ADC_PACER_CLOCK:
+        printk("das1602_read: Enter interrupt.#4  nSpare1 = %#x.\n", BoardData[board].nSpare1);
           #ifdef DEBUG
               printk("das1602_read(): Entering ADC_PACER_CLOCK mode.\n");
           #endif
@@ -740,6 +757,18 @@ static ssize_t das1602_read(struct file *filePtr, char *buf, size_t count, loff_
     #ifdef DEBUG
        printk("das1602_read: %s DIO Port %#x addr %#x set to %#x\n",
                              ADAPTER_ID, port, ChanDIO[board][port].addr, bReg);
+    #endif
+    BoardData[board].busyRead = FALSE;
+    return 1;
+  }
+
+  if ( chan == AD_CHANNELS + DIO_PORTS + DA_CHANNELS ) {
+    port = chan - AD_CHANNELS - DIO_PORTS - DA_CHANNELS;  /* port 0 */
+    bReg = inb(ChanDIO2[board][port].addr);
+    bReg &= 0x0f;
+    put_user(bReg, (u8*) buf);
+    #ifdef DEBUG
+       printk("das1602_read: %s DIO2 Port %#x addr %#x set to %#x\n", ADAPTER_ID, port, ChanDIO[board][port].addr, bReg);
     #endif
     BoardData[board].busyRead = FALSE;
     return 1;
@@ -814,6 +843,18 @@ static ssize_t das1602_write(struct file *filePtr, const char *buf, size_t count
                 port, ChanDAC[board][port].value );
     #endif
     return count;
+  }
+
+  /* writing to the DIO2 */
+  if ((chan == AD_CHANNELS+DIO_PORTS+DA_CHANNELS)) {
+    port = chan - AD_CHANNELS - DIO_PORTS - DA_CHANNELS;  /* port = 0  */
+    get_user(bReg, (u8*)buf);
+    ChanDIO2[board][port].value = bReg;
+    outb_p(bReg, ChanDIO2[board][port].addr);
+    #ifdef DEBUG
+      printk("das1602_write %s: DIO2 Port %#x set to %#x\n", ADAPTER_ID, port, bReg);
+    #endif
+    return 1;
   }
 
   return 1;
