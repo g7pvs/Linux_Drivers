@@ -1,6 +1,8 @@
 /***************************************************************************
  Copyright (C) 2011  Warren J. Jasper   <wjasper@ncsu.edu>
  All rights reserved.
+ Updates and modifications by Trev Jackson <trev.g7pvs@ntlworld.com>
+ Copyright (C) 2026
 
  This program, PCIM-DAS1602/16, is free software; you can redistribute it
  and/or modify it under the terms of the GNU General Public License as
@@ -67,9 +69,9 @@
 
 /* ADC mode values (pacer source) */
 #define ADC_SOFT_CONVERT           (0x0)
-#define ADC_EXTERNAL_PACER_FALLING (0x2)
-#define ADC_EXTERNAL_PACER_RISING  (0x4)
-#define ADC_PACER_CLOCK            (0x6)
+#define ADC_EXTERNAL_PACER_FALLING (0x6)
+#define ADC_EXTERNAL_PACER_RISING  (0x2)
+#define ADC_PACER_CLOCK            (0x3)
 
 /* Digital I/O Modes */
 #define MODE_IO            0
@@ -100,14 +102,10 @@
 /* Programmable Range and Gain Settings */
 // Note: The mode is controlled by an onboard switch to unipolar or bipolar
 
-#define BP_10_00V  (0x04)    /* +/- 10V      */
-#define BP_5_00V   (0x05)    /* +/-  5V      */
-#define BP_2_50V   (0x06)    /* +/-  2.5V    */
-#define BP_1_25V   (0x07)    /* +/-  1.25V   */
-#define UP_10_00V  (0x00)    /* 0 - 10V      */
-#define UP_5_00V   (0x01)    /* 0 - 5V       */
-#define UP_2_50V   (0x02)    /* 0 - 2.5V     */
-#define UP_1_25V   (0x03)    /* 0 - 1.25V    */
+#define P_10_00V  (0x00)    /* +/- 10V   bipolar or 0 to 10V unipolar   */
+#define P_5_00V   (0x01)    /* +/- 5V    bipolar or 0 to 5V unipolar    */
+#define P_2_50V   (0x02)    /* +/- 2.5V  bipolar or 0 to 2.5V unipolar  */
+#define P_1_25V   (0x03)    /* +/- 1.25V bipolar or 0 to 1.25V unipolar */
 
 /* digital output */
 #define DIO_0 0x1
@@ -120,5 +118,14 @@
 #define SW_TRIGGER        2
 #define EXTERNAL_TRIGGER  3
 
+#define GATE_EN       0x8  /* 1=gate internal pacer always on, ignore pin 25
+                              0=the gate to the internal pacer is controlled by signal on pin 25 */
+#define GATE_LATCH    0x10 /* 1=signal on pin 25 will act as edge trigger to internal pacer. It is latched
+                              in hardware.  Software must clear latch by writing 0 to GATE_STATUS bit.
+                              0 = the signal on pin 25 will act as a level gate to the internal pacer. */
+#define GATE_POL      0x20 /* 1=the trigger/gate polarity is set to a negative edge / low level for non
+                              burst mode, and a positive edge / high level for burst mode.
+                              0=the trigger/gate polarity is set to a positive edge / low level for non
+                              burst mode, and a negative edge / high level for burst mode. */
 
 #endif
